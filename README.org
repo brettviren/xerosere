@@ -1,0 +1,86 @@
+#+title: xerosere
+
+A multi-repo, multi-environment software development manager.  It generalizes
+the ~umbrella~ Bash script from the *dune-xerosere* project so the same patterns
+can be applied to other trees built from multiple source repos against
+different "environments".
+
+The common point across environments is an *environment view directory*
+containing the conventional ~view/{bin,lib,include}/~ sub-directories, which a
+Spack environment (today) or a pixi environment (future) can produce.
+
+* Install
+
+#+begin_src shell
+uv tool install -e .        # editable, exposes the `xerosere` command
+#+end_src
+
+* Quick start
+
+#+begin_src shell
+# create/initialize a working area (makes <area>/.xerosere/)
+xerosere -c config.toml init workarea
+cd workarea
+xerosere init                 # idempotent re-configure of the cwd
+
+# add a package under the devel/ tree
+xerosere dev repo add https://github.com/org/pkg.git
+xerosere dev repo add https://github.com/org/pkg.git localname
+
+# inspect/edit the active configuration
+xerosere config show
+xerosere config get env_build
+xerosere config set env_name gcc15
+
+# drive the Spack environment, then the CMake super-build, then tests
+xerosere spack concretize
+xerosere spack install
+xerosere dev config           # whole super-build (devel/CMakeLists.txt)
+xerosere dev build
+xerosere dev config wire-cell-toolkit   # a single package, stand-alone
+xerosere test                 # tests/<name>/run.sh <env_name> <outdir>
+#+end_src
+
+* Configuration
+
+The *active configuration* is a flat set of string parameters built by a
+phased procedure and then string-interpolated.
+
+Resolution phases (last found wins):
+
+1. built-in defaults (in ~xerosere.config.DEFAULTS~)
+2. shell environment variables ~XEROSERE_<PARAM>~
+3. XDG file ~~/.config/xerosere/config.toml~
+4. local file ~<root>/.xerosere/config.toml~
+5. explicit ~-c/--config <file>~
+6. CLI option overrides ~--<param>~
+
+Within the file layers, an ~[env.DEFAULT]~ section is the base of every named
+~[env.<name>]~ section; ~config_name~ (settable anywhere) selects the active
+section.  After selection, ~{param}~ references in values are expanded
+iteratively until stable.
+
+Nomenclature: parameter ~foo_bar~ => env var ~XEROSERE_FOO_BAR~ => option
+~--foo-bar~.
+
+Relative path-valued parameters resolve against the *project root*: the
+nearest ancestor directory containing a ~.xerosere/~ sub-directory.
+
+** CMake variables
+
+Free-form CMake variable sets live in ~[cmake.<name>]~ tables.  An
+~[env.<name>]~ section names one via ~cmake_config~ (configure step) and/or
+~cmake_build~ (build step); each entry becomes a ~-D<key>=<value>~ passed to
+cmake.  On the command line, ~xerosere dev config -D FOO=BAR~ passes through
+extra defines; other trailing tokens that are not ~devel/~ package names are
+passed verbatim to cmake.
+
+* Status
+
+Implemented: ~init~, ~config show|get|set~, ~dev repo add~, ~spack
+concretize|install~, ~dev config|build~, ~test~, and drop-in of a generic
+super-build ~devel/CMakeLists.txt~.
+
+Deferred: ~spack develop~ integration, the ~deps~ (cmake-examine) graph, pixi
+environments, and configuration provenance display.
+#+end_src

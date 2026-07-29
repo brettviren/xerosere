@@ -1,0 +1,26 @@
+[project]
+name = "xerosere"
+version = "0.1.0"
+description = "Multi-repo, multi-environment software development manager (generalizes the dune-xerosere umbrella script)"
+readme = {file = "README.org", content-type = "text/org"}
+authors = [
+    { name = "Brett Viren", email = "brett.viren@gmail.com" }
+]
+requires-python = ">=3.13"
+dependencies = [
+    "click>=8.1",
+    "tomlkit>=0.13",
+]
+
+[project.scripts]
+xerosere = "xerosere:main"
+
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+xerosere = ["templates/*.in"]

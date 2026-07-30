@@ -1,7 +1,7 @@
 [project]
 name = "xerosere"
-version = "0.1.0"
-description = "Multi-repo, multi-environment software development manager (generalizes the dune-xerosere umbrella script)"
+version = "0.2.0"
+description = "Multi-repo, multi-environment software development manager"
 readme = {file = "README.org", content-type = "text/org"}
 authors = [
     { name = "Brett Viren", email = "brett.viren@gmail.com" }
@@ -35,4 +35,4 @@ dev = [
 [tool.pytest.ini_options]
 testpaths = ["test"]
 # test/workdir is a hand-driven playground, not a test package.
-norecursedirs = ["test/workdir", ".venv", "*.egg-info", "build", "dist"]
+norecursedirs = ["test/workdir", ".beads", ".claude", ".venv", "*.egg-info", "build", "dist"]

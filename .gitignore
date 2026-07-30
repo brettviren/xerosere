@@ -6,3 +6,8 @@
 *.db
 .beads-credential-key
 .beads/proxieddb/
+.envrc
+*.egg-info
+__pycache__
+*.pyc
+workdir

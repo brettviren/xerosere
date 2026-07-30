@@ -1,0 +1,64 @@
+#+title: A walk through using xerosere in a few ways.
+
+Caution: while this message is here, the examples have not been rigorously
+re-tested from a green field and are merely a recording of captured lines of
+shell history.
+ 
+* Test a self-contained workdir
+
+#+begin_example
+mkdir workdir
+cd workdir
+
+xerosere init
+xerosere extern bootstrap
+xerosere extern repo git@github.com:WireCell/edep-simphony-spack.git
+xerosere extern repo https://github.com/FNALssi/fnal_art.git
+xerosere extern repo https://github.com/Framework-R-D/phlex-spack-recipes.git
+xerosere extern repo git@github.com:WireCell/wire-cell-spack.git
+xerosere extern envs gcc15cxx23 --from ~/dune/xerosere/extern/envs/gcc15/spack.yaml
+xerosere spack concretize
+xerosere spack install
+#+end_example
+
+* Test a workdir that uses Spack from elsewhere
+
+This will leverage the Spack install area made above.
+
+#+begin_example
+$ mkdir -p ~/dev/xerosere-ad-hoc-testing/workdir-elsewhere-spack
+$ ~/dev/xerosere-ad-hoc-testing/workdir-elsewhere-spack
+$ xerosere --extern-root ../../xerosere/test/workdir/extern/spack init
+$ xerosere extern bootstrap
+#+end_example
+
+The local `extern/` directory should still be empty and =.xerosere/config.toml= updated so Spack-related parameters point to this outside Spack area.  Now make an environment:
+
+#+begin_example
+xerosere extern envs gcc15cxx23 --from ~/dune/xerosere/extern/envs/gcc15/spack.yaml
+#+end_example
+
+This places the =spack.yaml= but not yet makes the environment and view.  We do that:
+
+#+begin_example
+xerosere spack concretize
+#+end_example
+
+This is enough to populate the view.  No "install" needed.  But that relies on
+the =spack.yaml= representing what was installed in the original spack area.
+Extending the local env, or adding a novel env, will require actual Spack
+package installation which will require writing into the shared Spack area.  In
+addition to any external permissions, =xerosere= has this option to govern the use
+of the Spack area (shared or local):
+
+#+begin_example
+# .xerosers/config.toml
+
+# Okay to do installations in 
+spack_install_access = "read-write"
+
+# Do not attempt to do spack installs
+spack_install_access = "read-only"
+#+end_example
+
+

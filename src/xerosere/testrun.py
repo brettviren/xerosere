@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Brookhaven Science Associates, LLC.
+# SPDX-License-Identifier: Apache-2.0
+
 """Run project-level tests: tests/<name>/run.sh <env_name> <outdir>.
 
 Each run.sh reports via exit status (0=pass, 77=skip, other=fail).  Output goes

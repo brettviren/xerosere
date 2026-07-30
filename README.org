@@ -1,52 +1,71 @@
 #+title: xerosere
 
-A multi-repo, multi-environment software development manager.  It generalizes
-the ~umbrella~ Bash script from the *dune-xerosere* project so the same patterns
-can be applied to other trees built from multiple source repos against
-different "environments".
+This *xerosere* project extracts patterns initially developed in an ad-hoc way as
+part of the [[https://github.com/brettviren/dune-xerosere][dune-xerosere]] development (see there for name origin) so that they
+may be re-applied by others for other development efforts.  The patterns are
+realized by the =xerosere= program.
 
-The common point across environments is an *environment view directory*
-containing the conventional ~view/{bin,lib,include}/~ sub-directories, which a
-Spack environment (today) or a pixi environment (future) can produce.
+The main aspects of a xerosere development environment:
+
+- Allow scaling to a large number of source packages to be in scope for
+  development while requiring much less than linear scaling of developer time
+  and cognitive load.
+
+- Leverage Spack (adding pixi/conda support is planned) to provide the
+  dependencies that form the basis for building the code including use of
+  additional Spack package repos.
+
+- Support building and installing the developing source against multiple
+  dependency bases by leveraging Spack (or pixi) environment views.
+
+- Single-command global builds of all packages in development.  This includes
+  CMake "super build" pattern (for now, only CMake-based source) and use of
+  =spack develop=.
+
+The xerosere project is also compatible with Spack/pixi interop via [[https://github.com/brettviren/spaxi][spaxi]].
 
 * Install
+#+begin_example
+$ uv tool install git+https://github.com/brettviren/xerosere
+#+end_example
 
-#+begin_src shell
-uv tool install -e .        # editable, exposes the `xerosere` command
-#+end_src
 
 * Quick start
 
-#+begin_src shell
-# create/initialize a working area (makes <area>/.xerosere/)
-xerosere -c config.toml init workarea
-cd workarea
-xerosere init                 # idempotent re-configure of the cwd
+#+begin_example
 
-# add a package under the devel/ tree
-xerosere dev repo add https://github.com/org/pkg.git
-xerosere dev repo add https://github.com/org/pkg.git localname
+# Initialize green field
+$ xerosere init workdir
+$ cd workdir
 
-# inspect/edit the active configuration
-xerosere config show
-xerosere config get env_build
-xerosere config set env_name gcc15
+# Install local spack and add some Spack package repos
+$ xerosere extern bootstrap
+$ xerosere extern repo git@github.com:WireCell/edep-simphony-spack.git
+$ xerosere extern repo https://github.com/FNALssi/fnal_art.git
+$ xerosere extern repo https://github.com/Framework-R-D/phlex-spack-recipes.git
+$ xerosere extern repo git@github.com:WireCell/wire-cell-spack.git
 
-# drive the Spack environment, then the CMake super-build, then tests
-xerosere spack concretize
-xerosere spack install
-xerosere dev config           # whole super-build (devel/CMakeLists.txt)
-xerosere dev build
-xerosere dev config wire-cell-toolkit   # a single package, stand-alone
-xerosere test                 # tests/<name>/run.sh <env_name> <outdir>
-#+end_src
+# Make an initially empty (or primed) env
+$ xerosere extern envs myenv [--from /path/to/env/spack.yaml]
+
+$ t.b.d. commands to add packages, for now use bare spack
+
+# Concretize the Spack graph and install its packages
+$ xerosere spack concretize
+$ xerosere spack install
+#+end_example
+
+See [[file:docs/walk-through.org]] for more ways to use this including leveraging a pre-existing Spack installation.
 
 * Configuration
 
-The *active configuration* is a flat set of string parameters built by a
-phased procedure and then string-interpolated.
+The =xerosere= program uses a chain of configuration sources to determine an
+"active configuration".  The chain is first walked to construct one or more
+possible, named configurations.  Any values with Python f-string syntax are
+interpolated using other values in the parameter set and finally one parameter
+set is chosen by name as specified by the parameter =config_name=.
 
-Resolution phases (last found wins):
+The resolution phases follow a last-found-wins order:
 
 1. built-in defaults (in ~xerosere.config.DEFAULTS~)
 2. shell environment variables ~XEROSERE_<PARAM>~
@@ -55,16 +74,18 @@ Resolution phases (last found wins):
 5. explicit ~-c/--config <file>~
 6. CLI option overrides ~--<param>~
 
-Within the file layers, an ~[env.DEFAULT]~ section is the base of every named
-~[env.<name>]~ section; ~config_name~ (settable anywhere) selects the active
-section.  After selection, ~{param}~ references in values are expanded
-iteratively until stable.
+Within the file layers, a special ~[env.DEFAULT]~ section provides the base
+parameter set for every named ~[env.<name>]~ section.
 
 Nomenclature: parameter ~foo_bar~ => env var ~XEROSERE_FOO_BAR~ => option
 ~--foo-bar~.
 
-Relative path-valued parameters resolve against the *project root*: the
+Relative path-valued parameters resolve against the *project root* which is the
 nearest ancestor directory containing a ~.xerosere/~ sub-directory.
+
+The =xerosere init= will prime the =.xerosere/= directory and =xerosere= commands will
+record configuration to the local =.xerosere/config.toml= which may also be
+modified by the user.
 
 ** CMake variables
 
@@ -75,12 +96,11 @@ cmake.  On the command line, ~xerosere dev config -D FOO=BAR~ passes through
 extra defines; other trailing tokens that are not ~devel/~ package names are
 passed verbatim to cmake.
 
-* Status
+* Welcome additions
 
-Implemented: ~init~, ~config show|get|set~, ~dev repo add~, ~spack
-concretize|install~, ~dev config|build~, ~test~, and drop-in of a generic
-super-build ~devel/CMakeLists.txt~.
-
-Deferred: ~spack develop~ integration, the ~deps~ (cmake-examine) graph, pixi
-environments, and configuration provenance display.
-#+end_src
+- [ ] Use =mr= / MyRepos to simplify managing the many git clones involved.
+- [ ] Making package-level dependency graphs (for now can directly use =cmake-examine= which is part of [[https://github.com/brettviren/tools][this tools collection]]).
+- [ ] Commands to help manage envs: add packages, package grouping needed for complex builds (eg, with phlex involved)
+- [ ] Defining xerosere envs from named (non-directory) Spack envs.
+- [ ] Testing against Spack install areas in =/cvmfs=.
+  

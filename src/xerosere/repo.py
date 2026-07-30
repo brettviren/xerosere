@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Brookhaven Science Associates, LLC.
+# SPDX-License-Identifier: Apache-2.0
+
 """`xerosere dev repo add`: clone a source repo under the devel root."""
 
 from __future__ import annotations

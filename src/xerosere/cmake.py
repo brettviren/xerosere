@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Brookhaven Science Associates, LLC.
+# SPDX-License-Identifier: Apache-2.0
+
 """Drive the CMake super-build (devel/CMakeLists.txt) or single packages.
 
 Ports ``umbrella config`` / ``umbrella build`` including its hard-won defences:

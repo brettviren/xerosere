@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Brookhaven Science Associates, LLC.
+# SPDX-License-Identifier: Apache-2.0
+
 """xerosere command-line interface (Click).
 
 Global options mirror the config parameters: parameter ``foo_bar`` is settable
@@ -12,9 +15,9 @@ import sys
 from pathlib import Path
 
 import click
-import tomlkit
 
 from . import cmake as cmake_mod
+from . import extern as extern_mod
 from . import repo as repo_mod
 from . import spack as spack_mod
 from . import testrun
@@ -25,6 +28,7 @@ from .config import (
     ConfigError,
     find_root,
     resolve,
+    set_params,
 )
 from .util import Die
 
@@ -89,6 +93,16 @@ def init(ctx: click.Context, directory) -> None:
         print(f"xerosere: seeded {seed} from {cfile}")
 
     cfg = _get_config(ctx, root=target)
+
+    # Persist any CLI parameter overrides into the active section so subsequent
+    # xerosere calls in this area inherit them (e.g. `--extern-root` pointing at
+    # an out-of-tree spack) without having to repeat them.
+    overrides = ctx.obj["overrides"]
+    if overrides:
+        written = set_params(target, cfg.active_name, overrides)
+        recorded = ", ".join(f"{k}={v!r}" for k, v in sorted(overrides.items()))
+        print(f"xerosere: recorded {recorded} in [env.{cfg.active_name}] of {written}")
+
     for param in ("devel_root", "builds_root", "installs_root"):
         cfg.path(param).mkdir(parents=True, exist_ok=True)
     print(f"xerosere: initialized {target}")
@@ -130,19 +144,53 @@ def config_set(ctx: click.Context, param, value) -> None:
     """Set PARAM to VALUE in the local .xerosere/config.toml active section."""
     cfg = _get_config(ctx)
     section = cfg.active_name
-    target = cfg.root / DOTDIR / "config.toml"
-    target.parent.mkdir(parents=True, exist_ok=True)
-
-    doc = tomlkit.parse(target.read_text()) if target.is_file() else tomlkit.document()
-    if "env" not in doc:
-        doc["env"] = tomlkit.table(is_super_table=True)
-    env = doc["env"]
-    if section not in env:
-        env[section] = tomlkit.table()
-    env[section][param] = value
-
-    target.write_text(tomlkit.dumps(doc))
+    target = set_params(cfg.root, section, {param: value})
     print(f"xerosere: set {param} = {value!r} in [env.{section}] of {target}")
+
+
+# --- extern -----------------------------------------------------------------
+@cli.group()
+def extern() -> None:
+    """Manage the external-package tree under extern_root."""
+
+
+@extern.command("bootstrap")
+@click.pass_context
+def extern_bootstrap(ctx: click.Context) -> None:
+    """Ensure the extern provider (extern_type) is installed (idempotent)."""
+    cfg = _get_config(ctx)
+    extern_mod.bootstrap(cfg)
+
+
+@extern.command("repo")
+@click.option("--tag", default=None, help="branch or tag to check out (GITURL only)")
+@click.argument("giturl", required=False)
+@click.pass_context
+def extern_repo(ctx: click.Context, tag, giturl) -> None:
+    """Add GITURL to extern_repo_urls and walk the list (idempotent).
+
+    With no GITURL the existing extern_repo_urls list is walked to assure every
+    entry is cloned and (for spack) registered in list order.
+    """
+    cfg = _get_config(ctx)
+    extern_mod.repo(cfg, giturl, tag)
+
+
+@extern.command("envs")
+@click.option(
+    "--from", "from_", default=None,
+    help="seed from an existing named env or a spack.yaml file",
+)
+@click.argument("name")
+@click.pass_context
+def extern_envs(ctx: click.Context, from_, name) -> None:
+    """Assure a directory Spack environment NAME exists (idempotent).
+
+    With no --from an empty environment is created under spack_envs/NAME; with
+    --from it is seeded from an existing named environment or a spack.yaml file.
+    """
+    cfg = _get_config(ctx)
+    extern_mod.envs(cfg, name, from_)
 
 
 # --- dev --------------------------------------------------------------------
@@ -188,26 +236,32 @@ def dev_build(ctx: click.Context, defines, args) -> None:
 
 # --- spack ------------------------------------------------------------------
 @cli.group()
-def spack() -> None:
+@click.option(
+    "--insecure", is_flag=True,
+    help="pass spack's global --insecure (skip TLS cert/checksum checks)",
+)
+@click.pass_context
+def spack(ctx: click.Context, insecure) -> None:
     """Drive the Spack directory-environment."""
+    ctx.obj["insecure"] = insecure
 
 
 @spack.command("concretize", context_settings=_PASSTHROUGH)
 @click.argument("args", nargs=-1, type=click.UNPROCESSED)
 @click.pass_context
 def spack_concretize(ctx: click.Context, args) -> None:
-    """spack -e <env> concretize -f [args...]."""
+    """spack [--insecure] -e <env> concretize -f [args...]."""
     cfg = _get_config(ctx)
-    spack_mod.concretize(cfg, list(args))
+    spack_mod.concretize(cfg, list(args), insecure=ctx.obj["insecure"])
 
 
 @spack.command("install", context_settings=_PASSTHROUGH)
 @click.argument("args", nargs=-1, type=click.UNPROCESSED)
 @click.pass_context
 def spack_install(ctx: click.Context, args) -> None:
-    """spack -e <env> install [args...], then rebuild the view from scratch."""
+    """spack [--insecure] -e <env> install [args...], then rebuild the view."""
     cfg = _get_config(ctx)
-    spack_mod.install(cfg, list(args))
+    spack_mod.install(cfg, list(args), insecure=ctx.obj["insecure"])
 
 
 # --- test -------------------------------------------------------------------

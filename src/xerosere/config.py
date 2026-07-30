@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Brookhaven Science Associates, LLC.
+# SPDX-License-Identifier: Apache-2.0
+
 """Configuration subsystem for xerosere.
 
 The "active configuration" is a single flat set of string-valued parameters
@@ -53,11 +56,29 @@ DEFAULTS: dict[str, str] = {
     # extern tree (dependency provider)
     "extern_root": "extern",
     "extern_type": "spack",  # "spack" (only supported today) or "pixi" (future)
+    # version/ref of the extern provider to bootstrap.  This is the default for
+    # extern_type == "spack"; other provider types may want a different default
+    # (see EXTERN_DEFAULT_VERSION in extern.py).
+    "extern_version": "v1.2.2",
+    # where `extern repo` clones augmenting package repos
+    "extern_repos": "{extern_root}/repos",
+    # ordered, whitespace-separated list of git URLs of augmenting package
+    # repos.  `extern repo` walks this list in order; for spack the registration
+    # order sets package precedence (last URL wins, as `spack repo add`
+    # prepends).  Whitespace-separated so it is safe as a CLI arg / env var
+    # without inventing a delimiter that might occur inside a git URL.
+    "extern_repo_urls": "",
     # spack locations
     "spack_root": "{extern_root}/spack",
     "spack_exe": "{spack_root}/bin/spack",
     "spack_install": "{spack_root}/opt/spack",
     "spack_envs": "{extern_root}/envs",
+    # how xerosere may treat the spack source tree and install area:
+    #   "read-write" (default) -- xerosere may clone/pull spack and build/install
+    #   "read-only"            -- reuse an existing (possibly shared/external)
+    #                             spack: never modify its source or install tree
+    "spack_source_access": "read-write",
+    "spack_install_access": "read-write",
     # spack scope/cache isolation -- exported into any spawned spack so the
     # user's ~/.spack/ is never touched (see .envrc; a major source of grief
     # when spack is used from multiple trees).
@@ -89,6 +110,7 @@ DEFAULTS: dict[str, str] = {
 PATH_PARAMS: frozenset[str] = frozenset(
     {
         "extern_root",
+        "extern_repos",
         "spack_root",
         "spack_exe",
         "spack_install",
@@ -113,6 +135,11 @@ SPACK_ENV_VARS: dict[str, str] = {
     "SPACK_USER_CONFIG_PATH": "spack_user_config",
     "SPACK_SYSTEM_CONFIG_PATH": "spack_system_config",
 }
+
+# Accepted values for the *_access parameters.
+ACCESS_READ_WRITE = "read-write"
+ACCESS_READ_ONLY = "read-only"
+ACCESS_VALUES = (ACCESS_READ_WRITE, ACCESS_READ_ONLY)
 
 ENV_PREFIX = "XEROSERE_"
 XDG_CONFIG = Path("~/.config/xerosere/config.toml").expanduser()
@@ -317,6 +344,29 @@ def resolve(
         }
 
     return Config(params, resolved_cmake, root, active_name)
+
+
+def set_params(root: Path, section: str, values: dict[str, str]) -> Path:
+    """Persist *values* into the ``[env.<section>]`` table of the local config.
+
+    Creates ``<root>/.xerosere/config.toml`` (and the table) if needed, updates
+    the given keys in place, and returns the file path.  Idempotent: writing the
+    same values twice yields the same file.
+    """
+    target = root / DOTDIR / CONFIG_BASENAME
+    target.parent.mkdir(parents=True, exist_ok=True)
+    doc = (
+        tomlkit.parse(target.read_text()) if target.is_file() else tomlkit.document()
+    )
+    if "env" not in doc:
+        doc["env"] = tomlkit.table(is_super_table=True)
+    env = doc["env"]
+    if section not in env:
+        env[section] = tomlkit.table()
+    for key, val in values.items():
+        env[section][key] = val
+    target.write_text(tomlkit.dumps(doc))
+    return target
 
 
 class _LeaveMissing(dict):

@@ -21,6 +21,7 @@ from . import extern as extern_mod
 from . import repo as repo_mod
 from . import spack as spack_mod
 from . import testrun
+from . import variant as variant_mod
 from .config import (
     DEFAULTS,
     DOTDIR,
@@ -232,6 +233,50 @@ def dev_build(ctx: click.Context, defines, args) -> None:
     """Build the super-build (or the named package(s))."""
     cfg = _get_config(ctx)
     cmake_mod.build(cfg, list(defines), list(args))
+
+
+@dev.group()
+def variant() -> None:
+    """Variant devel/ trees: build a package from a git-worktree branch."""
+
+
+@variant.command("add")
+@click.argument("name")
+@click.option(
+    "--pkg", "pkgs", multiple=True, metavar="PACKAGE=BRANCH",
+    help="build devel/PACKAGE from a git worktree on BRANCH (repeatable)",
+)
+@click.option("--force", is_flag=True, help="reuse an existing worktree")
+@click.option(
+    "--remote", default="origin", show_default=True,
+    help="remote to fetch a non-local branch from (fresh)",
+)
+@click.pass_context
+def variant_add(ctx: click.Context, name, pkgs, force, remote) -> None:
+    """Create variant NAME building the given package(s) from worktrees.
+
+    A non-local branch is fetched fresh from --remote; a branch that exists
+    neither locally nor on that remote is an error (add the fork's remote).
+
+    Example: xerosere dev variant add spng --pkg wire-cell-toolkit=spng
+    """
+    variant_mod.add(_get_config(ctx), name, list(pkgs), force=force, remote=remote)
+
+
+@variant.command("list")
+@click.pass_context
+def variant_list(ctx: click.Context) -> None:
+    """List configured variants and their source overrides."""
+    variant_mod.list_variants(_get_config(ctx))
+
+
+@variant.command("remove")
+@click.argument("name")
+@click.option("--keep-worktrees", is_flag=True, help="leave the git worktrees in place")
+@click.pass_context
+def variant_remove(ctx: click.Context, name, keep_worktrees) -> None:
+    """Remove variant NAME (its config sections and, by default, worktrees)."""
+    variant_mod.remove(_get_config(ctx), name, keep_worktrees=keep_worktrees)
 
 
 # --- spack ------------------------------------------------------------------

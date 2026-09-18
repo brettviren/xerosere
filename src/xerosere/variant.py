@@ -95,6 +95,27 @@ def _resolve_branch(src: Path, branch: str, remote: str) -> tuple[str, bool]:
     )
 
 
+def _checked_out_at(src: Path, branch: str) -> str | None:
+    """Return the worktree path where *branch* is checked out, else None.
+
+    A git branch may be checked out in only one worktree at a time, so a branch
+    already checked out (typically the base checkout) cannot be added again.
+    """
+    r = run(
+        ["git", "-C", str(src), "worktree", "list", "--porcelain"],
+        check=False, capture=True,
+    )
+    if r.returncode != 0:
+        return None
+    path: str | None = None
+    for line in r.stdout.splitlines():
+        if line.startswith("worktree "):
+            path = line[len("worktree "):].strip()
+        elif line.strip() == f"branch refs/heads/{branch}":
+            return path
+    return None
+
+
 def _config_path(cfg: Config) -> Path:
     return cfg.root / DOTDIR / CONFIG_BASENAME
 
@@ -105,7 +126,8 @@ def _load_doc(cfg: Config) -> tomlkit.TOMLDocument:
 
 
 def add(
-    cfg: Config, name: str, pkgs: list[str], force: bool = False, remote: str = "origin"
+    cfg: Config, name: str, pkgs: list[str], force: bool = False,
+    remote: str = "origin", detach: bool = False,
 ) -> None:
     """Create variant *name*: worktree each PACKAGE=BRANCH and write its config."""
     if not pkgs:
@@ -131,10 +153,27 @@ def add(
             base, make_branch = _resolve_branch(src, branch, remote)
             add_cmd = ["git", "-C", str(src), "worktree", "add"]
             if make_branch:
-                # New local branch tracking the freshly-fetched remote tip.
+                # New local branch tracking the freshly-fetched remote tip; a
+                # fresh branch name can never already be checked out.
                 add_cmd += ["-b", branch, str(wt), base]
             else:
-                add_cmd += [str(wt), base]
+                # A local branch may be checked out in only one worktree.
+                at = _checked_out_at(src, branch)
+                if at and not detach:
+                    die(
+                        f"branch {branch!r} is already checked out at {at}.\n"
+                        f"  A git branch can live in only one worktree, so it cannot\n"
+                        f"  also be checked out for this variant.  Options:\n"
+                        f"    * that tree already builds {branch!r} (likely your base\n"
+                        f"      checkout) -- just build the base; no variant needed; or\n"
+                        f"    * pick a different branch for the variant; or\n"
+                        f"    * pass --detach to build {branch!r}'s tip in a detached\n"
+                        f"      worktree (eg the same branch with different CMake flags)."
+                    )
+                if detach:
+                    add_cmd += ["--detach", str(wt), branch]
+                else:
+                    add_cmd += [str(wt), base]
             run(add_cmd)
         cmake_defs[f"XEROSERE_{proj}_SUBDIR"] = str(wt.resolve())
 

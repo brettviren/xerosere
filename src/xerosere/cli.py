@@ -251,16 +251,23 @@ def variant() -> None:
     "--remote", default="origin", show_default=True,
     help="remote to fetch a non-local branch from (fresh)",
 )
+@click.option(
+    "--detach", is_flag=True,
+    help="build a branch's tip in a detached worktree even if it is checked out elsewhere",
+)
 @click.pass_context
-def variant_add(ctx: click.Context, name, pkgs, force, remote) -> None:
+def variant_add(ctx: click.Context, name, pkgs, force, remote, detach) -> None:
     """Create variant NAME building the given package(s) from worktrees.
 
     A non-local branch is fetched fresh from --remote; a branch that exists
-    neither locally nor on that remote is an error (add the fork's remote).
+    neither locally nor on that remote is an error (add the fork's remote).  A
+    branch already checked out (eg your base checkout) needs --detach.
 
     Example: xerosere dev variant add spng --pkg wire-cell-toolkit=spng
     """
-    variant_mod.add(_get_config(ctx), name, list(pkgs), force=force, remote=remote)
+    variant_mod.add(
+        _get_config(ctx), name, list(pkgs), force=force, remote=remote, detach=detach
+    )
 
 
 @variant.command("list")

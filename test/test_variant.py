@@ -92,6 +92,41 @@ def test_add_remote_branch_fetches(tmp_path, monkeypatch):
     assert any("worktree" in c and "-b" in c and "myfork/spng" in c for c in run.calls)
 
 
+def _run_with_checkout(branch, checked_out, calls):
+    """A run() stand-in: BRANCH is local and checked out at CHECKED_OUT."""
+    def run(cmd, **kw):
+        calls.append(cmd)
+        if "show-ref" in cmd:
+            return subprocess.CompletedProcess(cmd, 0)  # local branch
+        if "worktree" in cmd and "list" in cmd:
+            out = f"worktree {checked_out}\nHEAD abc123\nbranch refs/heads/{branch}\n"
+            return subprocess.CompletedProcess(cmd, 0, stdout=out)
+        return subprocess.CompletedProcess(cmd, 0)
+    return run
+
+
+def test_add_branch_checked_out_errors(tmp_path, monkeypatch):
+    _make_pkg(tmp_path, "wct", "WireCell")
+    calls = []
+    monkeypatch.setattr(
+        variant, "run", _run_with_checkout("edep-sim", "/some/base/wct", calls)
+    )
+    with pytest.raises(Die, match="already checked out"):
+        variant.add(resolve(tmp_path), "wctedep", ["wct=edep-sim"])
+    # it stopped before actually adding a worktree
+    assert not any("worktree" in c and "add" in c for c in calls)
+
+
+def test_add_detach_allows_checked_out_branch(tmp_path, monkeypatch):
+    _make_pkg(tmp_path, "wct", "WireCell")
+    calls = []
+    monkeypatch.setattr(
+        variant, "run", _run_with_checkout("edep-sim", "/some/base/wct", calls)
+    )
+    variant.add(resolve(tmp_path), "wctedep", ["wct=edep-sim"], detach=True)
+    assert any("worktree" in c and "add" in c and "--detach" in c for c in calls)
+
+
 def test_list_and_remove(tmp_path, monkeypatch):
     _make_pkg(tmp_path, "wct", "WireCell")
     monkeypatch.setattr(variant, "run", _fake_run(returncode=0))
